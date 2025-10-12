@@ -2,13 +2,13 @@
   "$schema": "./schema.json",
   "id": "clipboard-history-manager",
   "name": "剪贴板历史管理器",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "author": "Naimo Tools",
   "icon": "./ico.png",
   "description": "实时监听剪贴板变化，保存剪贴板历史记录（文本、图片、文件等），支持分类、搜索、虚拟滚动展示",
   "category": "efficient_office",
   "enabled": true,
-  "main": "http://localhost:3000/",
+  "main": "./index.html",
   "preload": "./preload.js",
   "feature": [
     {

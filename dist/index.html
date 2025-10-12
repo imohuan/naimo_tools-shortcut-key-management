@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>剪贴板历史管理器</title>
+  <script type="module" crossorigin src="./js/main.DuXUxk68.js"></script>
+  <link rel="stylesheet" crossorigin href="./assets/main.CNuD04wD.css">
+</head>
+
+<body class="w-full h-screen select-none overflow-hidden">
+  <!-- SVG 图标引入 -->
+  <div id="svg-icons"></div>
+
+  <div id="app" class="w-full h-full flex flex-col bg-gray-50">
+
+    <!-- 工具栏 -->
+    <div class="toolbar">
+      <!-- 搜索框 -->
+      <div class="search-box">
+        <div class="search-input-wrapper">
+          <svg class="search-icon">
+            <use href="#icon-search"></use>
+          </svg>
+          <input type="text" id="searchInput" placeholder="搜索剪贴板内容..." class="search-input" />
+        </div>
+      </div>
+
+      <!-- 分类筛选按钮组 -->
+      <div class="filter-buttons">
+        <button class="filter-btn active" data-type="all">
+          <svg class="btn-icon">
+            <use href="#icon-all"></use>
+          </svg>
+          <span>全部</span>
+        </button>
+        <button class="filter-btn" data-type="text">
+          <svg class="btn-icon">
+            <use href="#icon-text"></use>
+          </svg>
+          <span>文本</span>
+        </button>
+        <button class="filter-btn" data-type="image">
+          <svg class="btn-icon">
+            <use href="#icon-image"></use>
+          </svg>
+          <span>图片</span>
+        </button>
+        <button class="filter-btn" data-type="file">
+          <svg class="btn-icon">
+            <use href="#icon-file"></use>
+          </svg>
+          <span>文件</span>
+        </button>
+      </div>
+
+      <!-- 操作按钮 -->
+      <div class="action-buttons">
+        <button id="monitorToggle" class="action-btn monitoring">
+          <svg class="btn-icon">
+            <use href="#icon-monitoring"></use>
+          </svg>
+          <span>监听中</span>
+        </button>
+        <button id="clearAllBtn" class="action-btn">
+          <svg class="btn-icon">
+            <use href="#icon-clear"></use>
+          </svg>
+          <span>清空</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- 统计信息 -->
+    <div class="stats-bar">
+      <span id="recordCount" class="stat-item">共 0 条记录</span>
+      <span id="filterInfo" class="stat-item">显示全部</span>
+    </div>
+
+    <!-- 虚拟滚动列表容器 -->
+    <div class="list-container">
+      <div id="listWrapper" class="list-wrapper">
+        <div id="listContent" class="list-content">
+          <!-- 列表项将在这里动态生成 -->
+        </div>
+      </div>
+
+      <!-- 空状态提示 -->
+      <div id="emptyState" class="empty-state">
+        <div class="empty-icon">📋</div>
+        <div class="empty-text">暂无剪贴板记录</div>
+        <div class="empty-hint">复制内容后会自动显示在这里</div>
+      </div>
+
+      <!-- 加载状态 -->
+      <div id="loadingState" class="loading-state" style="display: none;">
+        <div class="loading-spinner"></div>
+        <div class="loading-text">加载中...</div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- 图片预览弹窗 -->
+  <div id="imagePreviewModal" class="modal">
+    <div class="modal-overlay"></div>
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3 class="modal-title">图片预览</h3>
+        <button class="modal-close" id="closeModal">
+          <svg class="modal-close-icon">
+            <use href="#icon-close"></use>
+          </svg>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div class="image-preview-container">
+          <img id="previewImage" src="" alt="预览图片" class="preview-image" />
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button id="copyImageBtn" class="modal-btn primary">
+          <svg class="btn-icon">
+            <use href="#icon-copy"></use>
+          </svg>
+          <span>复制图片</span>
+        </button>
+        <button id="deleteImageBtn" class="modal-btn danger">
+          <svg class="btn-icon">
+            <use href="#icon-delete"></use>
+          </svg>
+          <span>删除</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- TypeScript 入口文件 -->
+</body>
+
+</html>

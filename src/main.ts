@@ -374,7 +374,11 @@ class ImagePreviewModal {
     // ESC 键关闭
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Escape' && this.modal.classList.contains('show')) {
-        this.hide();
+        if (this.isShow()) {
+          this.hide()
+          e.stopPropagation()
+          e.preventDefault()
+        }
       }
     });
 
@@ -435,6 +439,10 @@ class ImagePreviewModal {
     this.modal.classList.remove('show');
     this.currentRecord = null;
     this.previewImage.src = '';
+  }
+
+  isShow(): boolean {
+    return this.modal.classList.contains('show');
   }
 }
 
@@ -795,15 +803,3 @@ if (document.readyState === 'loading') {
 } else {
   initApp();
 }
-
-
-window.addEventListener('keydown', (e) => {
-  console.log(e.key);
-  e.preventDefault();
-  e.stopPropagation();
-});
-document.addEventListener('keydown', (e) => {
-  console.log(e.key);
-  e.preventDefault();
-  e.stopPropagation();
-});
