@@ -1,0 +1,31 @@
+{
+  "$schema": "./schema.json",
+  "id": "clipboard-history-manager",
+  "name": "剪贴板历史管理器",
+  "version": "1.0.0",
+  "author": "Naimo Tools",
+  "icon": "./ico.png",
+  "description": "实时监听剪贴板变化，保存剪贴板历史记录（文本、图片、文件等），支持分类、搜索、虚拟滚动展示",
+  "category": "efficient_office",
+  "enabled": true,
+  "main": "./index.html",
+  "preload": "./preload.js",
+  "feature": [
+    {
+      "path": "clipboard",
+      "name": "剪贴板历史",
+      "icon": "./ico.png",
+      "description": "查看和管理剪贴板历史记录",
+      "weight": 100,
+      "lifecycleType": "reuse",
+      "singleton": true,
+      "anonymousSearchFields": [
+        "clipboard",
+        "剪贴板",
+        "历史",
+        "复制",
+        "粘贴"
+      ]
+    }
+  ]
+}
