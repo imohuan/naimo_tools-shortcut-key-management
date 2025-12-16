@@ -1,6 +1,6 @@
 /**
  * 剪贴板历史管理插件 - 配置文件
- * 
+ *
  * 说明：本文件包含插件运行时的所有可配置项
  * 修改配置后需要重启插件才能生效
  */
@@ -27,10 +27,10 @@ export const ClipboardConfig = {
    */
 
   // 数据库名称
-  databaseName: 'clipboard_history',
+  databaseName: "clipboard_history",
 
   // 图片存储文件夹名称（相对于 userData 目录）
-  imagesFolderName: 'clipboard_images',
+  imagesFolderName: "clipboard_images",
 
   // 最大存储记录数
   // 超过此数量后会自动删除最旧的记录
@@ -63,7 +63,7 @@ export const ClipboardConfig = {
 
   // 缩略图格式
   // 可选值：'png' | 'jpg' | 'webp'
-  thumbnailFormat: 'png' as 'png' | 'jpg' | 'webp',
+  thumbnailFormat: "png" as "png" | "jpg" | "webp",
 
   // 是否保持宽高比
   // true: 按比例缩放，可能不会填满设定的宽高
@@ -80,7 +80,7 @@ export const ClipboardConfig = {
   maxImageSize: 4096,
 
   // 支持的图片格式
-  supportedImageFormats: ['png', 'jpg', 'jpeg', 'gif', 'bmp', 'webp'],
+  supportedImageFormats: ["png", "jpg", "jpeg", "gif", "bmp", "webp"],
 
   /**
    * ==================== UI 配置 ====================
@@ -99,7 +99,7 @@ export const ClipboardConfig = {
   virtualScrollBufferSize: 5,
 
   // 虚拟滚动 - 项间隔（像素）
-  virtualScrollItemGap: 12,
+  virtualScrollItemGap: 6,
 
   // 虚拟滚动 - 容器上下边距（像素）
   virtualScrollContainerPadding: 12,
@@ -130,7 +130,7 @@ export const ClipboardConfig = {
 
     // 时间格式
     // 可选值：'relative' (相对时间，如"3分钟前") | 'absolute' (绝对时间，如"2023-10-12 14:30")
-    timeFormat: 'absolute' as 'relative' | 'absolute',
+    timeFormat: "absolute" as "relative" | "absolute",
   },
 
   // 图片预览弹窗配置
@@ -173,11 +173,11 @@ export const ClipboardConfig = {
    */
 
   // 文件名前缀
-  filePrefix: 'clipboard',
+  filePrefix: "clipboard",
 
   // 时间戳格式
   // 格式说明：YYYY-年, MM-月, DD-日, HH-时, mm-分, ss-秒
-  timestampFormat: 'YYYYMMDD_HHmmss',
+  timestampFormat: "YYYYMMDD_HHmmss",
 
   /**
    * ==================== 隐私与安全配置 ====================
@@ -209,7 +209,7 @@ export const ClipboardConfig = {
 
   // 日志级别
   // 可选值：'debug' | 'info' | 'warn' | 'error'
-  logLevel: 'info' as 'debug' | 'info' | 'warn' | 'error',
+  logLevel: "info" as "debug" | "info" | "warn" | "error",
 };
 
 /**
@@ -245,6 +245,5 @@ export function setConfig<K extends keyof ClipboardConfigType>(
  */
 export function resetConfig(): void {
   // 这里可以实现配置重置逻辑
-  console.log('配置已重置为默认值');
+  console.log("配置已重置为默认值");
 }
-

@@ -8,7 +8,7 @@
   "description": "实时监听剪贴板变化，保存剪贴板历史记录（文本、图片、文件等），支持分类、搜索、虚拟滚动展示",
   "category": "efficient_office",
   "enabled": true,
-  "main": "./index.html",
+  "main": "http://localhost:3000/",
   "preload": "./preload.js",
   "feature": [
     {

@@ -93,7 +93,7 @@ const ClipboardConfig = {
   // 在可见区域上下额外渲染的项数，减少滚动时的闪烁
   virtualScrollBufferSize: 5,
   // 虚拟滚动 - 项间隔（像素）
-  virtualScrollItemGap: 12,
+  virtualScrollItemGap: 6,
   // 虚拟滚动 - 容器上下边距（像素）
   virtualScrollContainerPadding: 12,
   // 图片项配置
@@ -411,7 +411,21 @@ class DatabaseManager {
     try {
       const allRecords = await naimo.db.allDocs("", this.dbName);
       for (const doc of allRecords) {
-        await naimo.db.remove(doc._id, this.dbName);
+        const record = doc;
+        if (record.type === "image") {
+          if (record.originalPath) {
+            await fileManager.deleteFile(record.originalPath);
+          }
+          if (record.thumbnail) {
+            await fileManager.deleteFile(record.thumbnail);
+          }
+        }
+        const id = record._id ?? record.id;
+        if (!id) {
+          console.warn("清空记录时发现缺少 _id/id，已跳过该记录:", record);
+          continue;
+        }
+        await naimo.db.remove(id, this.dbName);
       }
       return true;
     } catch (error) {
@@ -576,6 +590,13 @@ class ClipboardWatcher {
     return this.isMonitoring;
   }
   /**
+   * 重置内部状态（用于清空历史后重新开始计数）
+   */
+  resetHistory() {
+    this.lastTextHash = "";
+    this.lastImageHash = "";
+  }
+  /**
    * 检查剪贴板变化
    */
   async checkClipboard() {
@@ -701,18 +722,19 @@ const clipboardHistoryAPI = {
   },
   clearAll: async () => {
     try {
-      const allRecords = await dbManager.queryRecords({ limit: 1e4 });
-      for (const record of allRecords) {
-        if (record.type === "image") {
-          if (record.originalPath) {
-            await fileManager.deleteFile(record.originalPath);
-          }
-          if (record.thumbnail) {
-            await fileManager.deleteFile(record.thumbnail);
-          }
-        }
-      }
-      return await dbManager.clearAll();
+      console.log("开始执行清空操作...");
+      console.log("开始清空数据库记录及相关文件");
+      const dbCleared = await dbManager.clearAll();
+      console.log("数据库清空结果:", dbCleared);
+      console.log("开始清空系统剪贴板");
+      const clipboardCleared = await naimo.clipboard.clear();
+      console.log("系统剪贴板清空结果:", clipboardCleared);
+      console.log("开始重置剪贴板监听器历史状态");
+      clipboardWatcher.resetHistory();
+      console.log("剪贴板监听器历史状态已重置");
+      const result = dbCleared && clipboardCleared;
+      console.log("清空操作最终结果:", result);
+      return result;
     } catch (error) {
       console.error("清空失败:", error);
       return false;
