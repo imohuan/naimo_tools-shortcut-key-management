@@ -323,10 +323,9 @@ function simpleHash(str: string): string {
   return Math.abs(hash).toString(36);
 }
 
-// 添加1000条随机数据
+// 添加1000条随机数据（使用最新 clipboardAPI JSONL 存储）
 async function addRandomRecords() {
   try {
-    const dbName = "clipboard_history";
     const textPreviewMaxLength = 100;
     const records: ClipboardRecord[] = [];
     const baseTimestamp = Date.now();
@@ -351,13 +350,12 @@ async function addRandomRecords() {
       records.push(record);
     }
 
-    // 批量保存记录
-    if (window.naimo?.db?.bulkDocs) {
-      await window.naimo.db.bulkDocs(records, dbName);
-    } else {
-      // 如果没有 bulkDocs，则逐个保存
+    // 通过最新的 clipboardAPI 写入 JSONL 文件
+    if (typeof clipboardAPI !== "undefined" && clipboardAPI.addRecords) {
+      await clipboardAPI.addRecords(records as any);
+    } else if (typeof clipboardAPI !== "undefined" && clipboardAPI.addRecord) {
       for (const record of records) {
-        await window.naimo.db.put(record, dbName);
+        await clipboardAPI.addRecord(record as any);
       }
     }
 

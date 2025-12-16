@@ -55,6 +55,7 @@ interface DbResult {
   error?: string;
 }
 
+
 // ==================== 文件管理器 ====================
 
 class FileManager {
@@ -241,21 +242,176 @@ class FileManager {
   }
 }
 
+// ==================== JSONL 存储管理器 ====================
+
+/**
+ * JSONL 存储管理器
+ * 每一行都是一个独立的 JSON 对象，结构示例：
+ * { "type": "image", "content": "...", "preview": "...", "thumbnail": "...", "originalPath": "...", "hash": "...", "_id": "...", "timestamp": 1234567890 }
+ */
+class JsonlStorageManager {
+  private filePath: string = '';
+  private initialized = false;
+
+  /**
+   * 初始化存储文件路径
+   */
+  async init(): Promise<void> {
+    if (this.initialized) return;
+
+    const userDataPath = await naimo.system.getPath('userData');
+    // 固定文件名，按需求只使用一个 JSONL 文件
+    this.filePath = path.join(userDataPath, "db", 'clipboard_history.jsonl');
+
+    // 确保文件存在
+    if (!fs.existsSync(this.filePath)) {
+      fs.writeFileSync(this.filePath, '', 'utf8');
+    }
+
+    this.initialized = true;
+  }
+
+  /**
+   * 追加一条记录到 JSONL 文件
+   * 只写入必要字段，便于手动查看和处理
+   */
+  async appendRecord(record: ClipboardRecord): Promise<void> {
+    await this.init();
+
+    const minimal = {
+      _id: record._id,
+      type: record.type,
+      content: record.content,
+      preview: record.preview,
+      thumbnail: record.thumbnail,
+      originalPath: record.originalPath,
+      hash: record.hash,
+      timestamp: record.timestamp,
+    };
+
+    const line = JSON.stringify(minimal) + '\n';
+    await fs.promises.appendFile(this.filePath, line, 'utf8');
+  }
+
+  /**
+   * 读取所有记录
+   */
+  async readAllRecords(): Promise<ClipboardRecord[]> {
+    await this.init();
+    try {
+      const content = await fs.promises.readFile(this.filePath, 'utf8');
+      if (!content.trim()) return [];
+
+      const lines = content.split('\n').filter(line => line.trim().length > 0);
+      const records: ClipboardRecord[] = [];
+
+      for (const line of lines) {
+        try {
+          const data = JSON.parse(line) as {
+            _id?: string;
+            type: 'text' | 'image' | 'file';
+            content: string;
+            preview: string;
+            thumbnail?: string;
+            originalPath?: string;
+            hash: string;
+            timestamp?: number;
+          };
+
+          const record: ClipboardRecord = {
+            _id: data._id || data.hash,
+            type: data.type,
+            content: data.content,
+            preview: data.preview,
+            thumbnail: data.thumbnail,
+            originalPath: data.originalPath,
+            hash: data.hash,
+            timestamp: data.timestamp ?? Date.now(),
+          };
+
+          records.push(record);
+        } catch (e) {
+          console.error('解析 JSONL 行失败，已跳过:', e);
+        }
+      }
+
+      return records;
+    } catch (error) {
+      console.error('读取 JSONL 文件失败:', error);
+      return [];
+    }
+  }
+
+  /**
+   * 根据 _id 删除记录（重写整个 JSONL 文件）
+   */
+  async deleteById(id: string): Promise<boolean> {
+    await this.init();
+    try {
+      const content = await fs.promises.readFile(this.filePath, 'utf8');
+      const lines = content.split('\n').filter(line => line.trim().length > 0);
+
+      let changed = false;
+      const keptLines: string[] = [];
+
+      for (const line of lines) {
+        try {
+          const data = JSON.parse(line) as { _id?: string };
+          if (data._id === id) {
+            changed = true;
+            continue;
+          }
+          keptLines.push(JSON.stringify(data));
+        } catch {
+          // 无法解析的行直接保留，避免误删
+          keptLines.push(line);
+        }
+      }
+
+      if (changed) {
+        const newContent = keptLines.length ? keptLines.join('\n') + '\n' : '';
+        await fs.promises.writeFile(this.filePath, newContent, 'utf8');
+      }
+
+      return changed;
+    } catch (error) {
+      console.error('删除 JSONL 记录失败:', error);
+      return false;
+    }
+  }
+
+  /**
+   * 清空所有记录
+   */
+  async clearAll(): Promise<boolean> {
+    await this.init();
+    try {
+      await fs.promises.writeFile(this.filePath, '', 'utf8');
+      return true;
+    } catch (error) {
+      console.error('清空 JSONL 文件失败:', error);
+      return false;
+    }
+  }
+}
+
 // ==================== 数据库管理器 ====================
 
 class DatabaseManager {
-  private dbName: string = ClipboardConfig.databaseName;
+  // 不再使用 naimo.db，而是使用 JSONL 文件来存储记录
+  private storage = new JsonlStorageManager();
 
   /**
    * 保存记录
    */
   async saveRecord(record: ClipboardRecord): Promise<DbResult> {
     try {
-      const result = await naimo.db.put(record, this.dbName);
+      // 所有类型统一保存到 JSONL 文件
+      await this.storage.appendRecord(record);
+
       return {
         ok: true,
-        id: result.id,
-        rev: result.rev,
+        id: record._id,
       };
     } catch (error: any) {
       console.error('保存记录失败:', error);
@@ -271,8 +427,9 @@ class DatabaseManager {
    */
   async getRecord(id: string): Promise<ClipboardRecord | null> {
     try {
-      const result = await naimo.db.get(id, this.dbName);
-      return result as ClipboardRecord;
+      const all = await this.storage.readAllRecords();
+      const found = all.find(item => item._id === id) || null;
+      return found;
     } catch (error) {
       console.error('获取记录失败:', error);
       return null;
@@ -284,6 +441,7 @@ class DatabaseManager {
    */
   async queryRecords(options: QueryOptions = {}): Promise<ClipboardRecord[]> {
     try {
+      const allRecords = await this.storage.readAllRecords();
       const {
         type,
         category,
@@ -293,11 +451,8 @@ class DatabaseManager {
         order = 'desc',
       } = options;
 
-      // 获取所有记录
-      const allDocs = await naimo.db.allDocs('', this.dbName);
-
       // 手动筛选和排序
-      let filtered = allDocs as ClipboardRecord[];
+      let filtered = allRecords as ClipboardRecord[];
 
       // 按类型筛选
       if (type) {
@@ -338,7 +493,7 @@ class DatabaseManager {
         return await this.queryRecords({ limit: 100 });
       }
 
-      const allRecords = await naimo.db.allDocs('', this.dbName);
+      const allRecords = await this.storage.readAllRecords();
 
       // 简单的关键词搜索
       const filtered = allRecords.filter((doc: any) => {
@@ -362,8 +517,7 @@ class DatabaseManager {
    */
   async deleteRecord(id: string): Promise<boolean> {
     try {
-      await naimo.db.remove(id, this.dbName);
-      return true;
+      return await this.storage.deleteById(id);
     } catch (error) {
       console.error('删除记录失败:', error);
       return false;
@@ -375,31 +529,28 @@ class DatabaseManager {
    */
   async clearAll(): Promise<boolean> {
     try {
-      const allRecords = await naimo.db.allDocs('', this.dbName);
-      for (const doc of allRecords as any[]) {
-        const record = doc as ClipboardRecord;
+      const allRecords = await this.storage.readAllRecords();
 
-        // 如果是图片，先删除对应的文件（原图 + 缩略图）
-        if (record.type === 'image') {
+      // 先删除所有图片文件
+      await Promise.all(
+        allRecords.map(async record => {
+          if (record.type !== 'image') return;
+          const tasks: Promise<unknown>[] = [];
           if (record.originalPath) {
-            await fileManager.deleteFile(record.originalPath);
+            tasks.push(fileManager.deleteFile(record.originalPath));
           }
           if (record.thumbnail) {
-            await fileManager.deleteFile(record.thumbnail);
+            tasks.push(fileManager.deleteFile(record.thumbnail));
           }
-        }
+          if (tasks.length) {
+            await Promise.all(tasks);
+          }
+        }),
+      );
 
-        // 兼容 _id / id 两种字段
-        const id = (record as any)._id ?? (record as any).id;
-        if (!id) {
-          console.warn('清空记录时发现缺少 _id/id，已跳过该记录:', record);
-          continue;
-        }
-
-        await naimo.db.remove(id, this.dbName);
-      }
-
-      return true;
+      // 再清空 JSONL 文件
+      const cleared = await this.storage.clearAll();
+      return cleared;
     } catch (error) {
       console.error('清空记录失败:', error);
       return false;
@@ -411,7 +562,7 @@ class DatabaseManager {
    */
   async checkDuplicate(hash: string): Promise<boolean> {
     try {
-      const allRecords = await naimo.db.allDocs('', this.dbName);
+      const allRecords = await this.storage.readAllRecords();
       const exists = allRecords.some((doc: any) => {
         const record = doc as ClipboardRecord;
         return record.hash === hash;
@@ -428,14 +579,11 @@ class DatabaseManager {
    */
   async findAndDeleteByHash(hash: string): Promise<ClipboardRecord | null> {
     try {
-      const allRecords = await naimo.db.allDocs('', this.dbName);
-      const oldRecord = allRecords.find((doc: any) => {
-        const record = doc as ClipboardRecord;
-        return record.hash === hash;
-      }) as ClipboardRecord | undefined;
+      const allRecords = await this.storage.readAllRecords();
+      const oldRecord = allRecords.find(record => record.hash === hash);
 
       if (oldRecord) {
-        await naimo.db.remove(oldRecord._id, this.dbName);
+        await this.storage.deleteById(oldRecord._id);
         console.log('已删除旧记录:', oldRecord._id);
         return oldRecord;
       }
@@ -759,6 +907,21 @@ const clipboardHistoryAPI = {
   },
 
   // ==================== 数据操作 ====================
+  addRecord: async (record: ClipboardRecord): Promise<DbResult> => {
+    return await dbManager.saveRecord(record);
+  },
+
+  addRecords: async (records: ClipboardRecord[]): Promise<DbResult[]> => {
+    const results: DbResult[] = [];
+    for (const record of records) {
+      // 逐条保存，便于后续扩展为批量写入
+      // 当前 JSONL 采用 append 模式，逐条写入即可
+      const res = await dbManager.saveRecord(record);
+      results.push(res);
+    }
+    return results;
+  },
+
   deleteRecord: async (id: string): Promise<boolean> => {
     try {
       const record = await dbManager.getRecord(id);

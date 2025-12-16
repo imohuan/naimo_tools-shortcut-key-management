@@ -304,18 +304,132 @@ class FileManager {
     return this.imagesDir;
   }
 }
+class JsonlStorageManager {
+  filePath = "";
+  initialized = false;
+  /**
+   * 初始化存储文件路径
+   */
+  async init() {
+    if (this.initialized) return;
+    const userDataPath = await naimo.system.getPath("userData");
+    this.filePath = path__namespace.join(userDataPath, "db", "clipboard_history.jsonl");
+    if (!fs__namespace.existsSync(this.filePath)) {
+      fs__namespace.writeFileSync(this.filePath, "", "utf8");
+    }
+    this.initialized = true;
+  }
+  /**
+   * 追加一条记录到 JSONL 文件
+   * 只写入必要字段，便于手动查看和处理
+   */
+  async appendRecord(record) {
+    await this.init();
+    const minimal = {
+      _id: record._id,
+      type: record.type,
+      content: record.content,
+      preview: record.preview,
+      thumbnail: record.thumbnail,
+      originalPath: record.originalPath,
+      hash: record.hash,
+      timestamp: record.timestamp
+    };
+    const line = JSON.stringify(minimal) + "\n";
+    await fs__namespace.promises.appendFile(this.filePath, line, "utf8");
+  }
+  /**
+   * 读取所有记录
+   */
+  async readAllRecords() {
+    await this.init();
+    try {
+      const content = await fs__namespace.promises.readFile(this.filePath, "utf8");
+      if (!content.trim()) return [];
+      const lines = content.split("\n").filter((line) => line.trim().length > 0);
+      const records = [];
+      for (const line of lines) {
+        try {
+          const data = JSON.parse(line);
+          const record = {
+            _id: data._id || data.hash,
+            type: data.type,
+            content: data.content,
+            preview: data.preview,
+            thumbnail: data.thumbnail,
+            originalPath: data.originalPath,
+            hash: data.hash,
+            timestamp: data.timestamp ?? Date.now()
+          };
+          records.push(record);
+        } catch (e) {
+          console.error("解析 JSONL 行失败，已跳过:", e);
+        }
+      }
+      return records;
+    } catch (error) {
+      console.error("读取 JSONL 文件失败:", error);
+      return [];
+    }
+  }
+  /**
+   * 根据 _id 删除记录（重写整个 JSONL 文件）
+   */
+  async deleteById(id) {
+    await this.init();
+    try {
+      const content = await fs__namespace.promises.readFile(this.filePath, "utf8");
+      const lines = content.split("\n").filter((line) => line.trim().length > 0);
+      let changed = false;
+      const keptLines = [];
+      for (const line of lines) {
+        try {
+          const data = JSON.parse(line);
+          if (data._id === id) {
+            changed = true;
+            continue;
+          }
+          keptLines.push(JSON.stringify(data));
+        } catch {
+          keptLines.push(line);
+        }
+      }
+      if (changed) {
+        const newContent = keptLines.length ? keptLines.join("\n") + "\n" : "";
+        await fs__namespace.promises.writeFile(this.filePath, newContent, "utf8");
+      }
+      return changed;
+    } catch (error) {
+      console.error("删除 JSONL 记录失败:", error);
+      return false;
+    }
+  }
+  /**
+   * 清空所有记录
+   */
+  async clearAll() {
+    await this.init();
+    try {
+      await fs__namespace.promises.writeFile(this.filePath, "", "utf8");
+      return true;
+    } catch (error) {
+      console.error("清空 JSONL 文件失败:", error);
+      return false;
+    }
+  }
+}
 class DatabaseManager {
-  dbName = ClipboardConfig.databaseName;
+  // 不再使用 naimo.db，而是使用 JSONL 文件来存储记录
+  storage = new JsonlStorageManager();
   /**
    * 保存记录
    */
   async saveRecord(record) {
     try {
-      const result = await naimo.db.put(record, this.dbName);
+      await this.storage.appendRecord(record);
       return {
         ok: true,
-        id: result.id,
-        rev: result.rev
+        id: record._id
       };
     } catch (error) {
       console.error("保存记录失败:", error);
@@ -330,8 +444,9 @@ class DatabaseManager {
    */
   async getRecord(id) {
     try {
-      const result = await naimo.db.get(id, this.dbName);
-      return result;
+      const all = await this.storage.readAllRecords();
+      const found = all.find((item) => item._id === id) || null;
+      return found;
     } catch (error) {
       console.error("获取记录失败:", error);
       return null;
@@ -342,6 +457,7 @@ class DatabaseManager {
    */
   async queryRecords(options = {}) {
     try {
+      const allRecords = await this.storage.readAllRecords();
       const {
         type,
         category,
@@ -350,8 +466,7 @@ class DatabaseManager {
         sortBy = "timestamp",
         order = "desc"
       } = options;
-      const allDocs = await naimo.db.allDocs("", this.dbName);
-      let filtered = allDocs;
+      let filtered = allRecords;
       if (type) {
         filtered = filtered.filter((doc) => doc.type === type);
       }
@@ -381,7 +496,7 @@ class DatabaseManager {
       if (!keyword.trim()) {
         return await this.queryRecords({ limit: 100 });
       }
-      const allRecords = await naimo.db.allDocs("", this.dbName);
+      const allRecords = await this.storage.readAllRecords();
       const filtered = allRecords.filter((doc) => {
         const record = doc;
         return record.content?.toLowerCase().includes(keyword.toLowerCase()) || record.preview?.toLowerCase().includes(keyword.toLowerCase()) || record.tags?.some((tag) => tag.toLowerCase().includes(keyword.toLowerCase()));
@@ -397,8 +512,7 @@ class DatabaseManager {
    */
   async deleteRecord(id) {
     try {
-      await naimo.db.remove(id, this.dbName);
-      return true;
+      return await this.storage.deleteById(id);
     } catch (error) {
       console.error("删除记录失败:", error);
       return false;
@@ -409,25 +523,24 @@ class DatabaseManager {
    */
   async clearAll() {
     try {
-      const allRecords = await naimo.db.allDocs("", this.dbName);
-      for (const doc of allRecords) {
-        const record = doc;
-        if (record.type === "image") {
+      const allRecords = await this.storage.readAllRecords();
+      await Promise.all(
+        allRecords.map(async (record) => {
+          if (record.type !== "image") return;
+          const tasks = [];
           if (record.originalPath) {
-            await fileManager.deleteFile(record.originalPath);
+            tasks.push(fileManager.deleteFile(record.originalPath));
           }
           if (record.thumbnail) {
-            await fileManager.deleteFile(record.thumbnail);
+            tasks.push(fileManager.deleteFile(record.thumbnail));
           }
-        }
-        const id = record._id ?? record.id;
-        if (!id) {
-          console.warn("清空记录时发现缺少 _id/id，已跳过该记录:", record);
-          continue;
-        }
-        await naimo.db.remove(id, this.dbName);
-      }
-      return true;
+          if (tasks.length) {
+            await Promise.all(tasks);
+          }
+        })
+      );
+      const cleared = await this.storage.clearAll();
+      return cleared;
     } catch (error) {
       console.error("清空记录失败:", error);
       return false;
@@ -438,7 +551,7 @@ class DatabaseManager {
    */
   async checkDuplicate(hash) {
     try {
-      const allRecords = await naimo.db.allDocs("", this.dbName);
+      const allRecords = await this.storage.readAllRecords();
       const exists = allRecords.some((doc) => {
         const record = doc;
         return record.hash === hash;
@@ -454,13 +567,10 @@ class DatabaseManager {
    */
   async findAndDeleteByHash(hash) {
     try {
-      const allRecords = await naimo.db.allDocs("", this.dbName);
-      const oldRecord = allRecords.find((doc) => {
-        const record = doc;
-        return record.hash === hash;
-      });
+      const allRecords = await this.storage.readAllRecords();
+      const oldRecord = allRecords.find((record) => record.hash === hash);
       if (oldRecord) {
-        await naimo.db.remove(oldRecord._id, this.dbName);
+        await this.storage.deleteById(oldRecord._id);
         console.log("已删除旧记录:", oldRecord._id);
         return oldRecord;
       }
@@ -700,6 +810,17 @@ const clipboardHistoryAPI = {
     return await dbManager.getRecord(id);
   },
   // ==================== 数据操作 ====================
+  addRecord: async (record) => {
+    return await dbManager.saveRecord(record);
+  },
+  addRecords: async (records) => {
+    const results = [];
+    for (const record of records) {
+      const res = await dbManager.saveRecord(record);
+      results.push(res);
+    }
+    return results;
+  },
   deleteRecord: async (id) => {
     try {
       const record = await dbManager.getRecord(id);
